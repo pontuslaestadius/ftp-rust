@@ -1,0 +1,4 @@
+[root]
+name = "ftp-rust"
+version = "0.1.0"
+

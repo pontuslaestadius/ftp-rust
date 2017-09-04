@@ -1,0 +1,6 @@
+[package]
+name = "ftp-rust"
+version = "0.1.0"
+authors = ["Pontus Laestadius <guslaepo@student.gu.se>"]
+
+[dependencies]

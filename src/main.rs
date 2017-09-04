@@ -3,20 +3,45 @@ pub mod server;
 
 
 use server::*;
-use std::thread;
 use std::net::TcpStream;
 use std::io::prelude::*;
-
-
+use std::{thread, time, env};
 
 fn main() {
+    let mut args: Vec<String> = env::args().collect();
 
-    // Handles the backend server.
+    // Handle environment variables.
 
-    println!("Starting server thread.");
-    //start_server();
+    if args.len() > 1 {
+        while args.len() > 1 {
+            let query = args.swap_remove(1);
+            match query.as_str() {
+                "server" => start_server(),
+                "client" => start_client(),
+                _ => eprintln!("unknown command '{}'", query)
+            };
+            let delay = time::Duration::from_millis(500);
+            thread::sleep(delay);
+        }
+    } else {
+        start_client();
+    }
 
-    println!("Connecting client.");
+}
+
+fn start_server() {
+    thread::spawn(|| {private_server();});
+}
+
+fn private_server() {
+    println!("server: starting");
+    let mut server = server::Server::new("127.0.0.1", "9005").unwrap();
+    println!("server: waiting...");
+    server.start();
+}
+
+fn start_client() {
+    println!("client: starting");
     let address = "127.0.0.1:9005";
     let mut stream = match ftp::connect(address) {
         Ok(t)  => t,
@@ -25,23 +50,11 @@ fn main() {
             panic!("caught an error while connecting");
         },
     };
-    println!("Connected");
-
+    println!("client: connected to {:?}", stream.peer_addr().unwrap());
 
     let path = "examples/receive/foo.txt";
     //let mut buf = ftp::get_buffer(path).unwrap();
     ftp::receive(&mut stream, path);
-
-    //server_thread.join();
-}
-
-
-fn start_server() {
-    let mut server = server::Server::new("127.0.0.1", "9005").unwrap();
-
-    println!("Server up.");
-
-    server.start();
 }
 
 pub mod ftp {
@@ -80,9 +93,11 @@ pub mod ftp {
     // A non-blocking recieve.
     pub fn receive(stream: &mut TcpStream, path: &str) -> Result<(), io::Error>{
         stream.write_all(path.as_bytes());
+        println!("client: I want a file from the server");
         let mut buf = Vec::new();
         let res = stream.read_to_end(&mut buf);
-        let mut f = File::create(path); // TODO use a different name path.
+
+        //let mut f = File::create(path); // TODO use a different name path.
         Ok(())
     }
 

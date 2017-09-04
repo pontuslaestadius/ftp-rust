@@ -81,12 +81,13 @@ impl Server {
 
     pub fn read_client(&mut self) {
         let (mut stream, addr) = self.assigner.accept().unwrap();
-        println!("Accepted connection: {:?}", addr);
+        println!("server: accepted {:?}", addr);
 
+        println!("server: Waiting for a message...");
         let mut string: String = String::new();
         stream.read_to_string(&mut string);
 
-        println!("handle_client: {}", string);
+        println!("server: received '{}'", string);
     }
 
     pub fn stop(&self) {

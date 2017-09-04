@@ -18,15 +18,15 @@ fn send(path: &str) -> Result<(), io::Error> {
     Ok(())
 }
 
+// Wrapper for a tcplistener
 pub struct Server {
-    connections: Vec<TcpListener>,
-    pub assigner: TcpListener,
+    pub stream: TcpListener,
     pub running: Running,
 }
 
 // Holds the state of the server.
 pub enum Running {
-    Yes(thread::JoinHandle<()>),
+    Yes,
     No,
 }
 
@@ -51,21 +51,30 @@ impl PartialEq for Running {
 }
 
 impl Server {
-    pub fn hopp(&self) {
+    pub fn host(port: &str) {
+        let mut server = Server::new("127.0.0.1", port).unwrap();
+        println!("server: ready");
+
+        for stream in server.stream.incoming() {
+            thread::spawn(|| {
+                let mut stream = stream.unwrap();
+                println!("server: connected {:?}", stream.peer_addr().unwrap());
+                //let mut string: String = String::new();
+                //let _ = stream.read_to_string(&mut string);
+                println!("server: received command '{}'", string);
+            });
+        }
+
+        println!("server: shutting down");
     }
 
     pub fn new(address: &str, port: &str) -> Result<Server, io::Error>  {
         let listener = TcpListener::bind([address,":",port].concat())?;
 
         Ok(Server {
-            connections: Vec::new(),
-            assigner: listener,
-            running: Running::No
+            stream: listener,
+            running: Running::Yes
         })
-    }
-
-    pub fn add(&mut self, listener: TcpListener) {
-        self.connections.push(listener);
     }
 
     pub fn running(&self) -> bool {
@@ -74,21 +83,22 @@ impl Server {
 
     pub fn start(&mut self) {
         if !self.running() {
-            //TODO introduce threading.
-            self.read_client();
+            // TODO this does nothing.
         }
     }
 
+    /*
     pub fn read_client(&mut self) {
         let (mut stream, addr) = self.assigner.accept().unwrap();
-        println!("server: accepted {:?}", addr);
-
         println!("server: Waiting for a message...");
-        let mut string: String = String::new();
-        stream.read_to_string(&mut string);
 
-        println!("server: received '{}'", string);
+        //let mut string: String = String::new();
+        //let _ = stream.read_to_string(&mut string);
+
+
+        //println!("server: received command '{}'", string);
     }
+    */
 
     pub fn stop(&self) {
         if self.running() {

@@ -1,30 +1,61 @@
+
+pub mod server;
+
+
+use server::*;
+use std::thread;
+use std::net::TcpStream;
+use std::io::prelude::*;
+
+
+
 fn main() {
-    let address = "127.0.0.1:34254";
-    let stream = match ftp::connect(address) {
+
+    // Handles the backend server.
+
+    println!("Starting server thread.");
+    //start_server();
+
+    println!("Connecting client.");
+    let address = "127.0.0.1:9005";
+    let mut stream = match ftp::connect(address) {
         Ok(t)  => t,
         Err(e) => {
             eprintln!("caught an error while connecting, {}", e);
             panic!("caught an error while connecting");
         },
     };
+    println!("Connected");
+
+
+    let path = "examples/receive/foo.txt";
+    //let mut buf = ftp::get_buffer(path).unwrap();
+    ftp::receive(&mut stream, path);
+
+    //server_thread.join();
+}
+
+
+fn start_server() {
+    let mut server = server::Server::new("127.0.0.1", "9005").unwrap();
+
+    println!("Server up.");
+
+    server.start();
 }
 
 pub mod ftp {
 
+    use std::net::TcpStream;
     use std::io::prelude::*;
     use std::io;
-    use std::net::TcpStream;
-    use std::path::Path;
-    use std::fs::OpenOptions;
+    use std::fs::{File, OpenOptions};
 
-    use std::fs::File;
-    use std::fs::*;
+    use std::thread;
 
     // Connects through TCP and return the stream.
     pub fn connect(address: &str) -> Result<TcpStream, io::Error> { //TODO
         let mut stream = TcpStream::connect(address)?;
-        stream.write(&[1])?;
-        stream.read(&mut [0; 128])?;
         Ok(stream)
     }
 
@@ -40,12 +71,23 @@ pub mod ftp {
         Ok(Buffer::new(buf))
     }
 
-    pub fn send(stream: &mut TcpStream, buf: Buffer) {
-        // TODO
+    // Writes all the content from the buffer to the stream.
+    pub fn send(stream: &mut TcpStream, buf: &mut Buffer) -> Result<(), io::Error> {
+        stream.write_all(buf.get())?;
+        Ok(())
+    }
+
+    // A non-blocking recieve.
+    pub fn receive(stream: &mut TcpStream, path: &str) -> Result<(), io::Error>{
+        stream.write_all(path.as_bytes());
+        let mut buf = Vec::new();
+        let res = stream.read_to_end(&mut buf);
+        let mut f = File::create(path); // TODO use a different name path.
+        Ok(())
     }
 
     pub fn progress_bar(buf: Buffer) {
-        // TODO
+        // TODO (Optional)
     }
 
     pub struct Buffer {
@@ -57,6 +99,10 @@ pub mod ftp {
             Buffer {
                 buf
             }
+        }
+
+        pub fn get(&mut self) -> &mut Vec<u8> {
+            &mut self.buf
         }
     }
 }

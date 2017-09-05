@@ -3,8 +3,9 @@ use std::io;
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::thread;
+use std::time;
 
 fn send(path: &str) -> Result<(), io::Error> {
     // TODO
@@ -58,14 +59,42 @@ impl Server {
         for stream in server.stream.incoming() {
             thread::spawn(|| {
                 let mut stream = stream.unwrap();
-                println!("server: connected {:?}", stream.peer_addr().unwrap());
-                //let mut string: String = String::new();
-                //let _ = stream.read_to_string(&mut string);
-                println!("server: received command '{}'", string);
+                Server::handle_client(&mut stream);
             });
         }
-
         println!("server: shutting down");
+    }
+
+    fn handle_client(stream: &mut TcpStream) {
+        println!("server: connected {:?}", stream.peer_addr().unwrap());
+        let mut buf = Vec::new();
+        let mut tries = 0;
+        loop {
+            let c = stream.read(&mut buf).unwrap();
+            let delay = time::Duration::from_millis(500);
+            thread::sleep(delay);
+            println!("server: read {} bytes", buf.len());
+
+            tries += 1;
+            if tries > 5 {
+                println!("server: nothing received, closing connection.");
+                return;
+            }
+        };
+
+        println!("server: received '{}' bytes", buf.len());
+    }
+
+    fn send_file(stream: &mut TcpStream, path: &str) -> Result<(), io::Error> {
+        let mut f = OpenOptions::new()
+            .read(true)
+            .truncate(false)
+            .open(path)?;
+
+        let mut content: String = String::new();
+        f.read_to_string(&mut content);
+        stream.write_all(content.as_bytes());
+        Ok(())
     }
 
     pub fn new(address: &str, port: &str) -> Result<Server, io::Error>  {

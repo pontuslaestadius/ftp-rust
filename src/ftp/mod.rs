@@ -2,6 +2,7 @@ use std::net::TcpStream;
 use std::io::prelude::*;
 use std::io;
 use std::fs::{File, OpenOptions};
+use std::time;
 
 pub mod server;
 
@@ -11,7 +12,7 @@ pub fn start_server() {
     thread::spawn(|| {server::Server::host("9005");});
 }
 
-pub fn start_client() {
+fn private_client() {
     let address = "127.0.0.1:9005";
     let mut stream = match connect(address) {
         Ok(t)  => t,
@@ -23,8 +24,19 @@ pub fn start_client() {
     println!("client: connected to {:?}", stream.peer_addr().unwrap());
 
     let path = "examples/receive/foo.txt";
-    //let mut buf = ftp::get_buffer(path).unwrap();
-    receive(&mut stream, path);
+
+    let delay = time::Duration::from_millis(120);
+    thread::sleep(delay);
+
+    println!("client: i want '{}'", path);
+    match receive(&mut stream, path) {
+        Ok(()) => (),
+        Err(e) => eprintln!("unable to write to server: {}", e),
+    }
+}
+
+pub fn start_client() {
+    thread::spawn(|| {private_client();});
 }
 
 // Connects through TCP and return the stream.
@@ -51,13 +63,11 @@ pub fn send(stream: &mut TcpStream, buf: &mut Buffer) -> Result<(), io::Error> {
     Ok(())
 }
 
-// A non-blocking recieve.
 pub fn receive(stream: &mut TcpStream, path: &str) -> Result<(), io::Error>{
     let _ = stream.write_all(path.as_bytes());
-    println!("client: I want: '{}'", path);
     let mut buf = Vec::new();
-    let _ = stream.read_to_end(&mut buf);
-
+    println!("client: waiting for response...");
+    let _ = stream.read(&mut buf);
     //let mut f = File::create(path); // TODO use a different name path.
     Ok(())
 }

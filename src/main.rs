@@ -1,6 +1,7 @@
 pub mod ftp;
 
 use std::{thread, time, env};
+use std::io;
 
 fn main() {
     let mut args: Vec<String> = env::args().collect();
@@ -14,11 +15,28 @@ fn main() {
                 "client" => ftp::start_client(),
                 _ => eprintln!("unknown command '{}'", query)
             };
-            let delay = time::Duration::from_millis(500);
+
+            // Sleep makes sure a client isn't created
+            // before a server has time to bind the socket.
+            let delay = time::Duration::from_millis(300);
             thread::sleep(delay);
         }
-    } else {
-        ftp::start_client();
+    }
+
+    loop {
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)
+            .expect("Failed to read line");
+
+        let len = input.len()-1;
+        input.truncate(len);
+        match input.as_str() {
+            "quit" => break,
+            "q" => break,
+            "client" => ftp::start_client(),
+            "server" => ftp::start_server(),
+            _ => println!("'{}' command not found", input),
+        };
     }
 
 }

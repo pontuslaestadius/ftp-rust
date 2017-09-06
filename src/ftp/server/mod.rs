@@ -19,6 +19,14 @@ fn send(path: &str) -> Result<(), io::Error> {
     Ok(())
 }
 
+pub fn byte_to_string(bytes: [u8; 500], range: usize) -> String {
+    let mut string = String::new();
+    for i in 0..range {
+        string.push(bytes[i] as char);
+    }
+    string
+}
+
 // Wrapper for a tcplistener
 pub struct Server {
     pub stream: TcpListener,
@@ -68,7 +76,7 @@ impl Server {
     fn handle_client(mut stream: TcpStream) {
         println!("server: connected {:?}", stream.peer_addr().unwrap());
         //let mut buf = Vec::new();
-        let mut buffer = [0; 50];
+        let mut buffer = [0; 500];
 
         let mut tries = 0;
         let mut c;
@@ -78,7 +86,7 @@ impl Server {
             thread::sleep(delay);
 
             if c != 0 {
-                println!("server: read {} bytes", c);
+                println!("server: received {}b", c);
                 break;
             }
 
@@ -90,37 +98,75 @@ impl Server {
             }
         };
 
-        println!("server: received '{}' bytes", c);
+        let string = byte_to_string(buffer, c);
 
-        let mut string = String::new();
-        for i in 0..c {
-            string.push(buffer[i] as char);
-        }
+        println!("server: received {}b read as: '{}'", c, string);
 
-        println!("server: received {}B read as: '{}'", c, string);
-
-
-        //let result = Server::action();
+        match Server::action(&mut stream, string.as_str()) {
+            Ok(_) => (),
+            Err(e) => {
+                eprintln!("server: Unable handle request '{}' threw '{}'",
+                          string, e);
+                stream.write_all(b"Err");
+            },
+        };
     }
 
-    /*
-    fn action(input: &str) {
+    fn action(stream: &mut TcpStream, input: &str) -> Result<(), io::Error>  {
         match input {
-            _
-        }
+            _ => Server::send_file(stream, input)?,
+        };
+        Ok(())
     }
-    */
 
     fn send_file(stream: &mut TcpStream, path: &str) -> Result<(), io::Error> {
+        println!("server: retrieving file...");
+
+        let content = Server::get_file(path)?;
+        stream.write_all(content.as_bytes());
+        Ok(())
+    }
+
+    fn get_file(path: &str) -> Result<String, io::Error> {
+
+        println!("server: Opening file...");
+
         let mut f = OpenOptions::new()
             .read(true)
             .truncate(false)
             .open(path)?;
 
+        let path_string = path.to_string();
+
+        let mut str: &str = "undefined.txt";
+
+        let split = path_string.split('/');
+
+        for s in split {
+            str = s;
+        }
+
+        let encoded = Server::encode_file(f, str);
+        println!("{}", encoded);
+        Ok(encoded)
+    }
+
+    fn encode_file(mut file: File, title: &str) -> String {
+        println!("server: encoding file...");
+
         let mut content: String = String::new();
-        f.read_to_string(&mut content);
-        stream.write_all(content.as_bytes());
-        Ok(())
+        file.read_to_string(&mut content);
+
+        [
+            "{\
+                meta\
+                    {\
+                        title:", title,
+                    "}\
+             }"
+
+        ]
+            .concat()
     }
 
     pub fn new(address: &str, port: u16) -> Result<Server, io::Error>  {

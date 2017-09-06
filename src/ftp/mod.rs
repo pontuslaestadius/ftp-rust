@@ -65,10 +65,33 @@ pub fn send(stream: &mut TcpStream, buf: &mut Buffer) -> Result<(), io::Error> {
 
 pub fn receive(stream: &mut TcpStream, path: &str) -> Result<(), io::Error>{
     let _ = stream.write_all(path.as_bytes());
-    let mut buf = Vec::new();
     println!("client: waiting for response from {}...",
              stream.peer_addr().unwrap());
-    let _ = stream.read(&mut buf);
+
+    let mut buffer = [0; 500];
+    let mut tries = 0;
+    let mut c;
+    loop {
+        c = stream.read(&mut buffer[..]).unwrap();
+        let delay = time::Duration::from_millis(500);
+        thread::sleep(delay);
+
+        if c != 0 {
+            println!("client: received {}b", c);
+            break;
+        }
+
+        tries += 1;
+        if tries > 20 {
+            println!("client: no data timeout ({})",
+                     stream.peer_addr().unwrap());
+            panic!("didn't receive anything.");
+        }
+    };
+
+    let string = server::byte_to_string(buffer, c);
+    println!("client: received {}b read as: '{}'", c, string);
+
     //let mut f = File::create(path); // TODO use a different name path.
     Ok(())
 }

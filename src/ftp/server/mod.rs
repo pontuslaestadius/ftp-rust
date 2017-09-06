@@ -52,38 +52,64 @@ impl PartialEq for Running {
 }
 
 impl Server {
-    pub fn host(port: &str) {
+    pub fn host(port: u16) {
         let mut server = Server::new("127.0.0.1", port).unwrap();
         println!("server: ready");
 
         for stream in server.stream.incoming() {
-            thread::spawn(|| {
-                let mut stream = stream.unwrap();
-                Server::handle_client(&mut stream);
+            let mut stream = stream.unwrap();
+            thread::spawn(move || {
+                Server::handle_client(stream);
             });
         }
         println!("server: shutting down");
     }
 
-    fn handle_client(stream: &mut TcpStream) {
+    fn handle_client(mut stream: TcpStream) {
         println!("server: connected {:?}", stream.peer_addr().unwrap());
-        let mut buf = Vec::new();
+        //let mut buf = Vec::new();
+        let mut buffer = [0; 50];
+
         let mut tries = 0;
+        let mut c;
         loop {
-            let c = stream.read(&mut buf).unwrap();
+            c = stream.read(&mut buffer[..]).unwrap();
             let delay = time::Duration::from_millis(500);
             thread::sleep(delay);
-            println!("server: read {} bytes", buf.len());
+
+            if c != 0 {
+                println!("server: read {} bytes", c);
+                break;
+            }
 
             tries += 1;
             if tries > 5 {
-                println!("server: nothing received, closing connection.");
+                println!("server: no data timeout ({})",
+                         stream.peer_addr().unwrap());
                 return;
             }
         };
 
-        println!("server: received '{}' bytes", buf.len());
+        println!("server: received '{}' bytes", c);
+
+        let mut string = String::new();
+        for i in 0..c {
+            string.push(buffer[i] as char);
+        }
+
+        println!("server: received {}B read as: '{}'", c, string);
+
+
+        //let result = Server::action();
     }
+
+    /*
+    fn action(input: &str) {
+        match input {
+            _
+        }
+    }
+    */
 
     fn send_file(stream: &mut TcpStream, path: &str) -> Result<(), io::Error> {
         let mut f = OpenOptions::new()
@@ -97,8 +123,9 @@ impl Server {
         Ok(())
     }
 
-    pub fn new(address: &str, port: &str) -> Result<Server, io::Error>  {
-        let listener = TcpListener::bind([address,":",port].concat())?;
+    pub fn new(address: &str, port: u16) -> Result<Server, io::Error>  {
+        let port: String = port.to_string();
+        let listener = TcpListener::bind([address,":",port.as_str()].concat())?;
 
         Ok(Server {
             stream: listener,

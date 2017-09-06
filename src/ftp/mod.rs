@@ -8,12 +8,12 @@ pub mod server;
 
 use std::thread;
 
-pub fn start_server() {
-    thread::spawn(|| {server::Server::host("9005");});
+pub fn start_server(port: u16) {
+    thread::spawn(move|| {server::Server::host(port);});
 }
 
 fn private_client() {
-    let address = "127.0.0.1:9005";
+    let address = "127.0.0.1:19005";
     let mut stream = match connect(address) {
         Ok(t)  => t,
         Err(e) => {
@@ -66,7 +66,8 @@ pub fn send(stream: &mut TcpStream, buf: &mut Buffer) -> Result<(), io::Error> {
 pub fn receive(stream: &mut TcpStream, path: &str) -> Result<(), io::Error>{
     let _ = stream.write_all(path.as_bytes());
     let mut buf = Vec::new();
-    println!("client: waiting for response...");
+    println!("client: waiting for response from {}...",
+             stream.peer_addr().unwrap());
     let _ = stream.read(&mut buf);
     //let mut f = File::create(path); // TODO use a different name path.
     Ok(())

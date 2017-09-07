@@ -32,7 +32,7 @@ fn action(input: &str) {
         "quit" => process::exit(0),
         "q" => process::exit(0),
         "client" => ftp::start_client(),
-        "server" => ftp::start_server(19005),
+        "server" => ftp::start_server("127.0.0.1", "19005"),
         "wait"   => thread::sleep(time::Duration::from_millis(300)),
         _ => println!("'{}' command not found", input),
     };

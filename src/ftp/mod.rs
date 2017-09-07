@@ -17,8 +17,53 @@ pub fn byte_to_string(bytes: &[u8], range: usize) -> String {
     string
 }
 
-pub fn start_server(port: u16) {
-    thread::spawn(move|| {server::Server::host(port);});
+fn encode_file(mut file: File, title: &str) -> String {
+    let mut content: String = String::new();
+    file.read_to_string(&mut content);
+
+    [
+        "{\
+                meta\
+                    {\
+                        type:file;\
+                        name:", title,
+        ";}\
+             }\
+                cont\
+                    {", content.as_str(), "}\
+             }"
+    ].concat()
+}
+
+fn send_file(stream: &mut TcpStream, path: &str) -> Result<(), io::Error> {
+    let content = get_file(path)?;
+    stream.write_all(content.as_bytes())
+}
+
+fn get_file(path: &str) -> Result<String, io::Error> {
+    let mut f = OpenOptions::new()
+        .read(true)
+        .truncate(false)
+        .open(path)?;
+
+    let path_string = path.to_string();
+
+    let mut str: &str = "undefined.txt";
+
+    // Splits the path by directory dividers so the
+    // last split in the path is the file name.
+    let split = path_string.split('/');
+    for s in split {
+        str = s;
+    }
+
+    let encoded = encode_file(f, str);
+    println!("server: sending {}b", encoded.len());
+    Ok(encoded)
+}
+
+pub fn start_server(address: &str, port: &str) {
+    thread::spawn(move|| {server::host("127.0.0.1", "19005");});
 }
 
 fn private_client() {
@@ -32,7 +77,7 @@ fn private_client() {
     };
     println!("client: connected to {:?}", stream.peer_addr().unwrap());
 
-    let path = "examples/files/foo.txt";
+    let path = "examples/files/lorem.txt"; // TODO user sent information
 
     let delay = time::Duration::from_millis(120);
     thread::sleep(delay);
@@ -40,7 +85,7 @@ fn private_client() {
     println!("client: i want '{}'", path);
     match receive(stream, path) {
         Ok(()) => (),
-        Err(e) => eprintln!("unable to write to server: {}", e),
+        Err(e) => eprintln!("unable to process request, because '{}'", e),
     }
 }
 
@@ -74,10 +119,10 @@ pub fn send(stream: &mut TcpStream, buf: &mut Buffer) -> Result<(), io::Error> {
 
 pub fn receive(mut stream: TcpStream, path: &str) -> Result<(), io::Error>{
     let _ = stream.write_all(path.as_bytes());
-    println!("client: waiting for response from {}...", stream.peer_addr()?);
+    //println!("client: waiting for response from {}...", stream.peer_addr()?);
 
     let (string, c) = read_socket(&mut stream, 5)?;
-    println!("client: received {}b read as: '{}'", c, string);
+    println!("client: received {}b", c);
 
     decode_file(string)?;
     Ok(())
@@ -85,7 +130,7 @@ pub fn receive(mut stream: TcpStream, path: &str) -> Result<(), io::Error>{
 
 pub fn read_socket<'a>
 (stream: &mut TcpStream, timeout_sec: usize) -> Result<(String, usize), io::Error> {
-    let mut buffer = [0; 512]; // TODO improve length
+    let mut buffer = [0; 1024*8]; // TODO improve length
     let mut tries = 0;
     let mut c;
     let increment_delay = 250;
@@ -146,12 +191,10 @@ pub fn decode_file(string: String) -> Result<File, io::Error> {
             decoded_cont = &decoded_cont[..len];
         }
 
-        println!("decoded_name '{}'", decoded_name);
-        println!("decoded_type '{}'", decoded_type);
-        println!("decoded_cont '{}'", decoded_cont);
+        println!("name '{}' \t type '{}' \t size '{}b'", decoded_name,decoded_type,decoded_cont.len());
     }
 
-    let path = ["examples/receive/", decoded_name].concat();
+    let path = ["examples/", decoded_name].concat();
     let mut f = File::create(path)?;
     f.write_all(decoded_cont.as_bytes());
 

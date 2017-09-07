@@ -69,13 +69,21 @@ impl Server {
     fn handle_client(mut stream: TcpStream) {
         println!("server: connected {:?}", stream.peer_addr().unwrap());
 
-        let (string, c) = match super::read_socket(&mut stream, 5) {
-            Ok(t) => t,
-            Err(e) => {
-                Server::notify_client_err(&mut stream,e);
-                process::exit(3);
-            },
-        };
+        let mut string;
+        let mut c: usize;
+        loop {
+            let res = match super::read_socket(&mut stream, 1) {
+                Ok(t) => t,
+                Err(e) => {
+                    Server::notify_client_err(&mut stream,e);
+                    continue
+                },
+            };
+            string = res.0;
+            c = res.1;
+            break;
+        }
+
 
         println!("server: received {}b read as: '{}'", c, string);
 
@@ -107,9 +115,6 @@ impl Server {
     }
 
     fn get_file(path: &str) -> Result<String, io::Error> {
-
-        println!("server: Opening file...");
-
         let mut f = OpenOptions::new()
             .read(true)
             .truncate(false)
@@ -143,14 +148,14 @@ impl Server {
             "{\
                 meta\
                     {\
-                        title:", title,
-                    "}\
+                        type:file;\
+                        name:", title,
+                    ";}\
              }\
                 cont\
                     {", content.as_str(), "}\
              }"
-        ]
-            .concat()
+        ].concat()
     }
 
     pub fn new(address: &str, port: u16) -> Result<Server, io::Error>  {

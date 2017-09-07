@@ -32,7 +32,7 @@ fn private_client() {
     };
     println!("client: connected to {:?}", stream.peer_addr().unwrap());
 
-    let path = "examples/receive/foo.txt";
+    let path = "examples/files/foo.txt";
 
     let delay = time::Duration::from_millis(120);
     thread::sleep(delay);
@@ -74,30 +74,27 @@ pub fn send(stream: &mut TcpStream, buf: &mut Buffer) -> Result<(), io::Error> {
 
 pub fn receive(mut stream: TcpStream, path: &str) -> Result<(), io::Error>{
     let _ = stream.write_all(path.as_bytes());
-    println!("client: waiting for response from {}...",
-             stream.peer_addr().unwrap());
+    println!("client: waiting for response from {}...", stream.peer_addr()?);
 
-
-    let (string, c) = read_socket(&mut stream, 5).unwrap();
+    let (string, c) = read_socket(&mut stream, 5)?;
     println!("client: received {}b read as: '{}'", c, string);
 
-    //let mut f = File::create(path); // TODO use a different name path.
+    decode_file(string)?;
     Ok(())
 }
 
 pub fn read_socket<'a>
 (stream: &mut TcpStream, timeout_sec: usize) -> Result<(String, usize), io::Error> {
-    let mut buffer = [0; 500]; // TODO improve length
+    let mut buffer = [0; 512]; // TODO improve length
     let mut tries = 0;
     let mut c;
-    let increment_delay = 500;
+    let increment_delay = 250;
     let timeout = (timeout_sec as f64/(increment_delay as f64*0.001)) as usize;
+    let delay = time::Duration::from_millis(increment_delay);
+    stream.set_read_timeout(Some(delay))?;
     loop {
-        c = stream.read(&mut buffer[..]).unwrap();
-        if c == 0 {
-            let delay = time::Duration::from_millis(increment_delay);
-            thread::sleep(delay);
-        } else {
+        c = stream.read(&mut buffer[..])?;
+        if c != 0 {
             break;
         }
 
@@ -107,6 +104,58 @@ pub fn read_socket<'a>
         }
     };
     Ok((byte_to_string(&buffer, c), c))
+}
+
+pub fn decode_file(string: String) -> Result<File, io::Error> {
+    println!("decoding file...");
+
+    let mut split = string.split('{');
+
+    let mut decoded_type: &str = "";
+    let mut decoded_name: &str = "undefined.txt";
+    let mut decoded_cont: &str = "";
+
+    let mut section = split.next().unwrap();
+    while section == "" {
+        section = split.next().unwrap();
+    }
+
+    println!("sec: '{}'", section);
+
+    if section == "Err" {
+        panic!("received an error from the server");
+    }
+
+    if section == "meta" {
+        let mut section2 = split.next().unwrap().split('}');
+        let mut row = section2.next().unwrap().split(';');
+        for each in row {
+            if each == "" {continue};
+            println!("row '{}'", each);
+            let mut i = each.split(":");
+            match i.next().unwrap() {
+                "name" => decoded_name = i.next().unwrap(),
+                "type" => decoded_type = i.next().unwrap(),
+                _ => println!("unknown meta data"), // TODO improve message.
+            };
+        } // Handle packets that don't start with 'meta'
+
+        {
+            decoded_cont = split.next().unwrap();
+            let len = decoded_cont.len() -2;
+            decoded_cont = &decoded_cont[..len];
+        }
+
+        println!("decoded_name '{}'", decoded_name);
+        println!("decoded_type '{}'", decoded_type);
+        println!("decoded_cont '{}'", decoded_cont);
+    }
+
+    let path = ["examples/receive/", decoded_name].concat();
+    let mut f = File::create(path)?;
+    f.write_all(decoded_cont.as_bytes());
+
+    Ok(f)
 }
 
 pub fn progress_bar(buf: Buffer) {

@@ -3,10 +3,19 @@ use std::io::prelude::*;
 use std::io;
 use std::fs::{File, OpenOptions};
 use std::time;
+use std::io::{Error, ErrorKind};
 
 pub mod server;
 
 use std::thread;
+
+pub fn byte_to_string(bytes: &[u8], range: usize) -> String {
+    let mut string = String::new();
+    for i in 0..range {
+        string.push(bytes[i] as char);
+    }
+    string
+}
 
 pub fn start_server(port: u16) {
     thread::spawn(move|| {server::Server::host(port);});
@@ -29,7 +38,7 @@ fn private_client() {
     thread::sleep(delay);
 
     println!("client: i want '{}'", path);
-    match receive(&mut stream, path) {
+    match receive(stream, path) {
         Ok(()) => (),
         Err(e) => eprintln!("unable to write to server: {}", e),
     }
@@ -63,37 +72,41 @@ pub fn send(stream: &mut TcpStream, buf: &mut Buffer) -> Result<(), io::Error> {
     Ok(())
 }
 
-pub fn receive(stream: &mut TcpStream, path: &str) -> Result<(), io::Error>{
+pub fn receive(mut stream: TcpStream, path: &str) -> Result<(), io::Error>{
     let _ = stream.write_all(path.as_bytes());
     println!("client: waiting for response from {}...",
              stream.peer_addr().unwrap());
 
-    let mut buffer = [0; 500];
-    let mut tries = 0;
-    let mut c;
-    loop {
-        c = stream.read(&mut buffer[..]).unwrap();
-        let delay = time::Duration::from_millis(500);
-        thread::sleep(delay);
 
-        if c != 0 {
-            println!("client: received {}b", c);
-            break;
-        }
-
-        tries += 1;
-        if tries > 20 {
-            println!("client: no data timeout ({})",
-                     stream.peer_addr().unwrap());
-            panic!("didn't receive anything.");
-        }
-    };
-
-    let string = server::byte_to_string(buffer, c);
+    let (string, c) = read_socket(&mut stream, 5).unwrap();
     println!("client: received {}b read as: '{}'", c, string);
 
     //let mut f = File::create(path); // TODO use a different name path.
     Ok(())
+}
+
+pub fn read_socket<'a>
+(stream: &mut TcpStream, timeout_sec: usize) -> Result<(String, usize), io::Error> {
+    let mut buffer = [0; 500]; // TODO improve length
+    let mut tries = 0;
+    let mut c;
+    let increment_delay = 500;
+    let timeout = (timeout_sec as f64/(increment_delay as f64*0.001)) as usize;
+    loop {
+        c = stream.read(&mut buffer[..]).unwrap();
+        if c == 0 {
+            let delay = time::Duration::from_millis(increment_delay);
+            thread::sleep(delay);
+        } else {
+            break;
+        }
+
+        tries += 1;
+        if tries > timeout {
+            return Err(Error::new(ErrorKind::Other, "timeout"));
+        }
+    };
+    Ok((byte_to_string(&buffer, c), c))
 }
 
 pub fn progress_bar(buf: Buffer) {

@@ -6,6 +6,7 @@ use std::io::prelude::*;
 use std::net::{TcpListener, TcpStream};
 use std::thread;
 use std::time;
+use std::process;
 
 fn send(path: &str) -> Result<(), io::Error> {
     // TODO
@@ -17,14 +18,6 @@ fn send(path: &str) -> Result<(), io::Error> {
     let mut buf: Vec<u8> = Vec::new();
     f.read_to_end(&mut buf)?;
     Ok(())
-}
-
-pub fn byte_to_string(bytes: [u8; 500], range: usize) -> String {
-    let mut string = String::new();
-    for i in 0..range {
-        string.push(bytes[i] as char);
-    }
-    string
 }
 
 // Wrapper for a tcplistener
@@ -75,41 +68,27 @@ impl Server {
 
     fn handle_client(mut stream: TcpStream) {
         println!("server: connected {:?}", stream.peer_addr().unwrap());
-        //let mut buf = Vec::new();
-        let mut buffer = [0; 500];
 
-        let mut tries = 0;
-        let mut c;
-        loop {
-            c = stream.read(&mut buffer[..]).unwrap();
-            let delay = time::Duration::from_millis(500);
-            thread::sleep(delay);
-
-            if c != 0 {
-                println!("server: received {}b", c);
-                break;
-            }
-
-            tries += 1;
-            if tries > 5 {
-                println!("server: no data timeout ({})",
-                         stream.peer_addr().unwrap());
-                return;
-            }
+        let (string, c) = match super::read_socket(&mut stream, 5) {
+            Ok(t) => t,
+            Err(e) => {
+                Server::notify_client_err(&mut stream,e);
+                process::exit(3);
+            },
         };
-
-        let string = byte_to_string(buffer, c);
 
         println!("server: received {}b read as: '{}'", c, string);
 
         match Server::action(&mut stream, string.as_str()) {
             Ok(_) => (),
-            Err(e) => {
-                eprintln!("server: Unable handle request '{}' threw '{}'",
-                          string, e);
-                stream.write_all(b"Err");
-            },
+            Err(e) => Server::notify_client_err(&mut stream, e),
+
         };
+    }
+
+    fn notify_client_err(stream: &mut TcpStream, error: io::Error) {
+        eprintln!("server: Unable handle request. threw '{}'", error);
+        stream.write_all(b"Err");
     }
 
     fn action(stream: &mut TcpStream, input: &str) -> Result<(), io::Error>  {
@@ -140,8 +119,9 @@ impl Server {
 
         let mut str: &str = "undefined.txt";
 
+        // Splits the path by directory dividers so the
+        // last split in the path is the file name.
         let split = path_string.split('/');
-
         for s in split {
             str = s;
         }
@@ -151,6 +131,8 @@ impl Server {
         Ok(encoded)
     }
 
+
+    // TODO move to ftp/mod.rs
     fn encode_file(mut file: File, title: &str) -> String {
         println!("server: encoding file...");
 
@@ -163,8 +145,10 @@ impl Server {
                     {\
                         title:", title,
                     "}\
+             }\
+                cont\
+                    {", content.as_str(), "}\
              }"
-
         ]
             .concat()
     }

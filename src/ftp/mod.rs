@@ -9,6 +9,8 @@ pub mod server;
 
 use std::thread;
 
+static STDBUF: usize = 8154;
+
 pub fn byte_to_string(bytes: &[u8], range: usize) -> String {
     let mut string = String::new();
     for i in 0..range {
@@ -17,30 +19,74 @@ pub fn byte_to_string(bytes: &[u8], range: usize) -> String {
     string
 }
 
-fn encode_file(mut file: File, title: &str) -> String {
+fn encode_file(mut file: File, title: &str) -> Vec<String> {
     let mut content: String = String::new();
     file.read_to_string(&mut content);
+    encode("file", &mut content, title)
+}
 
-    [
-        "{\
+fn encode(encoded_type: &str, mut content: &mut String, title: &str) -> Vec<String> {
+    let size = content.len();
+    let mut split_at = 0;
+
+    let mut packages = Vec::new();
+
+
+    let mut pktnr = 1; // Meta data for depicting which packet this is. // TODO should this start at 0?
+    while split_at != content.len() {
+        pktnr += 1;
+
+        match (STDBUF + split_at) > content.len() {
+            true => split_at = content.len(),
+            false => split_at += STDBUF,
+        };
+
+        let min = match (content.len() as i16-split_at as i16 -STDBUF as i16) > 0 {
+            true => split_at-STDBUF,
+            false => 0,
+        };
+
+        println!("content {} split_at {} min {}", content.len(), split_at, min);
+
+
+         // TODO make this process more modular.
+        packages.push([
+            "{\
                 meta\
                     {\
-                        type:file;\
-                        name:", title,
-        ";}\
+                        type:", encoded_type, ";\
+                        pktnr:", pktnr.to_string().as_str(), ";\
+                        name:", title, ";\
+                        size:", content[min..split_at].as_ref(),
+            ";}\
              }\
                 cont\
                     {", content.as_str(), "}\
              }"
-    ].concat()
+        ].concat());
+    };
+    packages
 }
+/*
+
+fn format_meta_data (fields: [&str], values: [&str]) -> &str {
+
+}
+
+fn format_tag (tag: &str, cont: &str) -> &str {
+    [tag, "{", cont, "}"].concat()
+}
+*/
 
 fn send_file(stream: &mut TcpStream, path: &str) -> Result<(), io::Error> {
     let content = get_file(path)?;
-    stream.write_all(content.as_bytes())
+    for item in content {
+        stream.write_all(item.as_bytes());
+    }
+    Ok(())
 }
 
-fn get_file(path: &str) -> Result<String, io::Error> {
+fn get_file(path: &str) -> Result<Vec<String>, io::Error> {
     let mut f = OpenOptions::new()
         .read(true)
         .truncate(false)
@@ -77,7 +123,7 @@ fn private_client() {
     };
     println!("client: connected to {:?}", stream.peer_addr().unwrap());
 
-    let path = "examples/files/lorem.txt"; // TODO user sent information
+    let path = "examples/files/foo.txt"; // TODO user sent information
 
     let delay = time::Duration::from_millis(120);
     thread::sleep(delay);
@@ -152,20 +198,17 @@ pub fn read_socket<'a>
 }
 
 pub fn decode_file(string: String) -> Result<File, io::Error> {
-    println!("decoding file...");
-
     let mut split = string.split('{');
 
     let mut decoded_type: &str = "";
     let mut decoded_name: &str = "undefined.txt";
     let mut decoded_cont: &str = "";
+    let mut decoded_size: &str = "";
 
     let mut section = split.next().unwrap();
     while section == "" {
         section = split.next().unwrap();
     }
-
-    println!("sec: '{}'", section);
 
     if section == "Err" {
         panic!("received an error from the server");
@@ -176,12 +219,15 @@ pub fn decode_file(string: String) -> Result<File, io::Error> {
         let mut row = section2.next().unwrap().split(';');
         for each in row {
             if each == "" {continue};
-            println!("row '{}'", each);
             let mut i = each.split(":");
-            match i.next().unwrap() {
-                "name" => decoded_name = i.next().unwrap(),
-                "type" => decoded_type = i.next().unwrap(),
-                _ => println!("unknown meta data"), // TODO improve message.
+
+            let property = i.next().unwrap();
+            let value = i.next().unwrap();
+            match property  {
+                "name" => decoded_name = value,
+                "type" => decoded_type = value,
+                "size" => decoded_type = value,
+                _ => println!("unknown meta data '{}' containing '{}'", property, value),
             };
         } // Handle packets that don't start with 'meta'
 

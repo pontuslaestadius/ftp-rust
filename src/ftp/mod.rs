@@ -9,7 +9,7 @@ pub mod server;
 
 use std::thread;
 
-static STDBUF: usize = 8154;
+const STDBUF: usize = 8154;
 
 pub fn byte_to_string(bytes: &[u8], range: usize) -> String {
     let mut string = String::new();
@@ -26,28 +26,29 @@ fn encode_file(mut file: File, title: &str) -> Vec<String> {
 }
 
 fn encode(encoded_type: &str, mut content: &mut String, title: &str) -> Vec<String> {
+    let stdbuf = STDBUF-154;
+
     let size = content.len();
     let mut split_at = 0;
 
     let mut packages = Vec::new();
 
 
-    let mut pktnr = 1; // Meta data for depicting which packet this is. // TODO should this start at 0?
+    let mut pktnr = 1; // Meta data depicting which packet this is. // TODO should this start at 0?
     while split_at != content.len() {
         pktnr += 1;
 
         match (STDBUF + split_at) > content.len() {
             true => split_at = content.len(),
-            false => split_at += STDBUF,
+            false => split_at += stdbuf,
         };
 
-        let min = match (content.len() as i16-split_at as i16 -STDBUF as i16) > 0 {
-            true => split_at-STDBUF,
+        let min = match (content.len() as i16-split_at as i16 -stdbuf as i16) > 0 {
+            true => split_at-stdbuf,
             false => 0,
         };
 
         println!("content {} split_at {} min {}", content.len(), split_at, min);
-
 
          // TODO make this process more modular.
         packages.push([
@@ -60,8 +61,7 @@ fn encode(encoded_type: &str, mut content: &mut String, title: &str) -> Vec<Stri
                         size:", content[min..split_at].as_ref(),
             ";}\
              }\
-                cont\
-                    {", content.as_str(), "}\
+                ", format_tag("cont", content[min..split_at].as_ref()).as_str() , "\
              }"
         ].concat());
     };
@@ -72,11 +72,11 @@ fn encode(encoded_type: &str, mut content: &mut String, title: &str) -> Vec<Stri
 fn format_meta_data (fields: [&str], values: [&str]) -> &str {
 
 }
+*/
 
-fn format_tag (tag: &str, cont: &str) -> &str {
+fn format_tag<'a, 'b> (tag: &'a str, cont: &'a str) -> String {
     [tag, "{", cont, "}"].concat()
 }
-*/
 
 fn send_file(stream: &mut TcpStream, path: &str) -> Result<(), io::Error> {
     let content = get_file(path)?;
@@ -117,22 +117,25 @@ fn private_client() {
     let mut stream = match connect(address) {
         Ok(t)  => t,
         Err(e) => {
-            eprintln!("client: caught an error while connecting, {}", e);
-            panic!("client: unrecoverable error, {}", e);
+            eprintln!("client: caught error while connecting, {}", e);
+            panic!("client: caught error while connecting, {}", e);  // TODO bad practice to panic here.
         },
     };
     println!("client: connected to {:?}", stream.peer_addr().unwrap());
 
     let path = "examples/files/foo.txt"; // TODO user sent information
+    println!("client: i want '{}'", path);
+    match get(&mut stream, path) {
+        Ok(_) => (),
+        Err(e) => panic!("unable to process get request. threw '{}'", e),
+    };
+}
 
+pub fn get(mut stream: &mut TcpStream, path: &str) -> Result<(), io::Error> {
     let delay = time::Duration::from_millis(120);
     thread::sleep(delay);
-
-    println!("client: i want '{}'", path);
-    match receive(stream, path) {
-        Ok(()) => (),
-        Err(e) => eprintln!("unable to process request, because '{}'", e),
-    }
+    receive(&mut stream, path)?;
+    Ok(())
 }
 
 pub fn start_client() {
@@ -163,7 +166,7 @@ pub fn send(stream: &mut TcpStream, buf: &mut Buffer) -> Result<(), io::Error> {
     Ok(())
 }
 
-pub fn receive(mut stream: TcpStream, path: &str) -> Result<(), io::Error>{
+pub fn receive(mut stream: &mut TcpStream, path: &str) -> Result<(), io::Error>{
     let _ = stream.write_all(path.as_bytes());
     //println!("client: waiting for response from {}...", stream.peer_addr()?);
 
@@ -176,7 +179,7 @@ pub fn receive(mut stream: TcpStream, path: &str) -> Result<(), io::Error>{
 
 pub fn read_socket<'a>
 (stream: &mut TcpStream, timeout_sec: usize) -> Result<(String, usize), io::Error> {
-    let mut buffer = [0; 1024*8]; // TODO improve length
+    let mut buffer = [0; STDBUF]; // TODO improve length
     let mut tries = 0;
     let mut c;
     let increment_delay = 250;

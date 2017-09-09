@@ -31,9 +31,11 @@ fn action(input: &str) {
     match input {
         "quit" => process::exit(0),
         "q" => process::exit(0),
-        "client" => ftp::start_client(),
         "server" => ftp::start_server("127.0.0.1", "19005"),
         "wait"   => thread::sleep(time::Duration::from_millis(300)),
+        "client" => ftp::start_client(),
+        // Client specific commands
+
         _ => println!("'{}' command not found", input),
     };
 }

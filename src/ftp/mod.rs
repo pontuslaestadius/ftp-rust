@@ -6,10 +6,12 @@ use std::time;
 use std::io::{Error, ErrorKind};
 
 pub mod server;
+pub mod client;
 
 use std::thread;
 
 const STDBUF: usize = 8154;
+
 
 pub fn byte_to_string(bytes: &[u8], range: usize) -> String {
     let mut string = String::new();
@@ -43,6 +45,7 @@ fn encode(encoded_type: &str, mut content: &mut String, title: &str) -> Vec<Stri
             false => split_at += stdbuf,
         };
 
+        // The lower end of the string slice.
         let min = match (content.len() as i16-split_at as i16 -stdbuf as i16) > 0 {
             true => split_at-stdbuf,
             false => 0,
@@ -74,9 +77,11 @@ fn format_meta_data (fields: [&str], values: [&str]) -> &str {
 }
 */
 
+// Returns the string encased in a tag.
 fn format_tag<'a, 'b> (tag: &'a str, cont: &'a str) -> String {
     [tag, "{", cont, "}"].concat()
 }
+
 
 fn send_file(stream: &mut TcpStream, path: &str) -> Result<(), io::Error> {
     let content = get_file(path)?;
@@ -114,13 +119,8 @@ pub fn start_server(address: &str, port: &str) {
 
 fn private_client() {
     let address = "127.0.0.1:19005";
-    let mut stream = match connect(address) {
-        Ok(t)  => t,
-        Err(e) => {
-            eprintln!("client: caught error while connecting, {}", e);
-            panic!("client: caught error while connecting, {}", e);  // TODO bad practice to panic here.
-        },
-    };
+    let client = client::new(address).unwrap();
+
     println!("client: connected to {:?}", stream.peer_addr().unwrap());
 
     let path = "examples/files/foo.txt"; // TODO user sent information
@@ -129,6 +129,15 @@ fn private_client() {
         Ok(_) => (),
         Err(e) => panic!("unable to process get request. threw '{}'", e),
     };
+}
+
+pub fn read_console() -> &str {
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)
+        .expect("Failed to read line");
+    let len = input.len()-1;
+    input.truncate(len);
+    input
 }
 
 pub fn get(mut stream: &mut TcpStream, path: &str) -> Result<(), io::Error> {
@@ -221,7 +230,7 @@ pub fn decode_file(string: String) -> Result<File, io::Error> {
         let mut section2 = split.next().unwrap().split('}');
         let mut row = section2.next().unwrap().split(';');
         for each in row {
-            if each == "" {continue};
+            if each == "" {continue}; // Empty rows are ignored.
             let mut i = each.split(":");
 
             let property = i.next().unwrap();

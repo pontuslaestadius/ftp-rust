@@ -67,7 +67,13 @@ fn notify_client_err(stream: &mut TcpStream, error: io::Error) {
 
 fn action(stream: &mut TcpStream, input: &str) -> Result<(), io::Error>  {
     match input {
+        "ask" => send_ask(stream),
         _ => super::send_file(stream, input)?,
     };
     Ok(())
+}
+
+fn send_ask(stream: &mut TcpStream) {
+    let mut files = "examples/files/foo.txt";
+    super::encode("ask", &mut files.to_string(), "");
 }

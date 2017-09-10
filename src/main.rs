@@ -13,16 +13,13 @@ fn main() {
             let query = args.swap_remove(1);
             action(query.as_str());
         }
-    }
 
-    // Retreives any input the user writes in during run-time.
-    loop {
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)
-            .expect("Failed to read line");
-        let len = input.len()-1;
-        input.truncate(len);
-        action(input.as_str());
+        // Retrieves any input the user writes in during run-time.
+    } else {
+        println!("general mode");
+
+        let input = ftp::read_console();
+        action(input);
     }
 }
 
@@ -32,10 +29,9 @@ fn action(input: &str) {
         "quit" => process::exit(0),
         "q" => process::exit(0),
         "server" => ftp::start_server("127.0.0.1", "19005"),
-        "wait"   => thread::sleep(time::Duration::from_millis(300)),
+        "wait"   => thread::sleep(time::Duration::from_millis(300)), // Used for environmental commands.
         "client" => ftp::start_client(),
         // Client specific commands
-
         _ => println!("'{}' command not found", input),
     };
 }

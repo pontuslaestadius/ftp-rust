@@ -17,7 +17,6 @@ fn main() {
         // Retrieves any input the user writes in during run-time.
     } else {
         println!("general mode");
-
         let input = ftp::read_console();
         action(input);
     }

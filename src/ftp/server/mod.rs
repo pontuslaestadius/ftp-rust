@@ -39,7 +39,7 @@ fn handle_client(mut stream: TcpStream) {
     let mut string;
     let mut c: usize;
     loop {
-        let res = match super::read_socket(&mut stream, 1) {
+        let res = match super::read_socket(&mut stream, 100000) {
             Ok(t) => t,
             Err(e) => {
                 notify_client_err(&mut stream,e);
@@ -62,18 +62,22 @@ fn handle_client(mut stream: TcpStream) {
 
 fn notify_client_err(stream: &mut TcpStream, error: io::Error) {
     eprintln!("server: Unable handle request. threw '{}'", error);
-    stream.write_all(b"Err");
+
+    let fields = vec!("name", "type");
+    let values = vec!("err", "disp");
+    let meta = super::metadata::new(fields, values);
+    stream.write_all(b"Hello world");
 }
 
 fn action(stream: &mut TcpStream, input: &str) -> Result<(), io::Error>  {
     match input {
         "ask" => send_ask(stream),
-        _ => super::send_file(stream, input)?,
-    };
-    Ok(())
+        _ => stream.write_all(input.as_bytes()),
+    }
 }
 
-fn send_ask(stream: &mut TcpStream) {
+fn send_ask(stream: &mut TcpStream) -> Result<(), io::Error> {
     let mut files = "examples/files/foo.txt";
-    super::encode("ask", &mut files.to_string(), "");
+    super::encode::generic("ask", &mut files.to_string(), "")?;
+    Ok(())
 }

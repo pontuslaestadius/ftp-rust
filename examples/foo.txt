@@ -1,2 +1,0 @@
-This is a sample file,
-It contains this sample text.

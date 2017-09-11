@@ -1,7 +1,6 @@
 pub mod ftp;
 
 use std::{thread, time, env};
-use std::io;
 use std::process;
 
 fn main() {
@@ -18,8 +17,10 @@ fn main() {
     } else {
         println!("general mode");
         let input = ftp::read_console();
-        action(input);
+        action(input.as_str());
     }
+
+    loop {/* TODO */}
 }
 
 // Matches an input str with the correlating action.
@@ -28,8 +29,8 @@ fn action(input: &str) {
         "quit" => process::exit(0),
         "q" => process::exit(0),
         "server" => ftp::start_server("127.0.0.1", "19005"),
-        "wait"   => thread::sleep(time::Duration::from_millis(300)), // Used for environmental commands.
-        "client" => ftp::start_client(),
+        "wait"   => thread::sleep(time::Duration::from_millis(1000)), // Used for environmental commands.
+        "client" => ftp::client::start("127.0.0.1:19005"),
         // Client specific commands
         _ => println!("'{}' command not found", input),
     };

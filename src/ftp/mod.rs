@@ -48,7 +48,7 @@ fn get_file(path: &str) -> Result<Vec<String>, io::Error> {
     }
 
     let encoded = encode::file(f, str)?;
-    println!("server: sending {}b", encoded.len());
+    println!("sending {} packet(s)", encoded.len());
     Ok(encoded)
 }
 
@@ -90,7 +90,7 @@ pub fn get(mut stream: &mut TcpStream, path: &str) -> Result<(), io::Error>{
     let (string, c) = read_socket(&mut stream, 5)?;
     println!("received {}b", c);
 
-    decode::file(string)?;
+    decode::generic(string)?;
     Ok(())
 }
 
@@ -116,6 +116,27 @@ pub fn read_socket<'a>
         }
     };
     Ok((byte_to_string(&buffer, c), c))
+}
+
+// TODO improve. Not implemented.
+pub fn send_ask(stream: &mut TcpStream) -> Result<(), io::Error> {
+    let mut files = "examples/files/foo.txt";
+    let packets = encode::generic("disp", &mut files.to_string(), "")?;
+    send_vec(stream, packets);
+    Ok(())
+}
+
+pub fn send_get(stream: &mut TcpStream, path: &str) -> Result<(), io::Error> {
+    let encoded = get_file(path)?;
+    send_vec(stream, encoded);
+    Ok(())
+}
+
+
+pub fn send_vec(stream: &mut TcpStream, vec: Vec<String>) {
+    for v in vec {
+        let _ = stream.write_all(v.as_bytes());
+    }
 }
 
 pub struct Buffer {

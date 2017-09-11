@@ -3,31 +3,29 @@ use std::io::prelude::*;
 use std::io;
 use std::fs::{File, OpenOptions};
 
-// Will decode a string in to a file format.
+pub fn generic(string: String) -> Result<(), io::Error> {
 
-// TODO make a safe and unsafe version.
-// Safe should prompt the user if it wants to save the file or not.
-pub fn file(string: String) -> Result<File, io::Error> {
+    println!("generic decoding on '{}'",string);
+
     let mut split = string.split('{');
 
     let mut decoded_type: &str = "";
     let mut decoded_name: &str = "undefined.txt";
     let mut decoded_cont: &str = "";
     let mut decoded_size: &str = "";
+    let mut decoded_pktn: &str = "";
 
     let mut section = split.next().unwrap();
     while section == "" {
         section = split.next().unwrap();
     }
 
-    if section == "Err" {
-        panic!("received an error from the server");
-    }
-
+    // The decoding of meta data should always be the same,
+    // so this rigid implementation should work for all cases hopefully.
     if section == "meta" {
         let mut section2 = split.next().unwrap().split('}');
-        let mut row = section2.next().unwrap().split(';');
-        for each in row {
+        let mut rows = section2.next().unwrap().split(';');
+        for each in rows {
             if each == "" {continue}; // Empty rows are ignored.
             let mut i = each.split(":");
 
@@ -36,11 +34,13 @@ pub fn file(string: String) -> Result<File, io::Error> {
             match property  {
                 "name" => decoded_name = value,
                 "type" => decoded_type = value,
-                "size" => decoded_type = value,
+                "size" => decoded_size = value,
+                "pktn" => decoded_pktn = value,
                 _ => println!("unknown meta data '{}' containing '{}'", property, value),
             };
         } // Handle packets that don't start with 'meta'
 
+        // Has to handle incomplete packets. TODO
         {
             decoded_cont = split.next().unwrap();
             let len = decoded_cont.len() -2;
@@ -50,9 +50,17 @@ pub fn file(string: String) -> Result<File, io::Error> {
         println!("name '{}' \t type '{}' \t size '{}b'", decoded_name,decoded_type,decoded_cont.len());
     }
 
-    let path = ["examples/", decoded_name].concat();
-    let mut f = File::create(path)?;
-    f.write_all(decoded_cont.as_bytes());
+    match decoded_type {
+        "file" => {
+            let path = ["examples/", decoded_name].concat();
+            let mut f = File::create(path)?;
+            f.write_all(decoded_cont.as_bytes())?;
+        },
+        "disp" => println!("{}", decoded_cont), // TODO this needs to be changed if the use of a real interface would be implemented.
+        _ => println!("unknown meta type '{}', discarding package", decoded_type),
 
-    Ok(f)
+    }
+
+    Ok(())
+
 }

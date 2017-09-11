@@ -51,7 +51,7 @@ impl Client {
 
     // TODO remove later. don't be lazy.
     fn easy_get_remove_later(&mut self) -> Result<(), io::Error> {
-        let path = "examples/files/foo.txt"; // TODO user sent information
+        let path = "get examples/files/foo.txt"; // TODO user sent information
         println!("client: i want '{}'", path);
         super::get(&mut self.stream, path)?;
         Ok(())

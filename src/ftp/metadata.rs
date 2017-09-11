@@ -21,8 +21,7 @@ impl<'a> Metadata<'a> {
             buffer.push_str(self.fields[i]);
             buffer.push(':');
             buffer.push_str(self.values[i]);
-            buffer.push(';');
-            buffer.push('\n');
+            buffer.push_str(";\n");
         }
         buffer
     }

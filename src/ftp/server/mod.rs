@@ -8,18 +8,6 @@ use std::thread;
 use std::time;
 use std::process;
 
-fn send(path: &str) -> Result<(), io::Error> {
-    // TODO
-    let mut f = OpenOptions::new()
-        .read(true)
-        .truncate(false)
-        .open(path)?;
-
-    let mut buf: Vec<u8> = Vec::new();
-    f.read_to_end(&mut buf)?;
-    Ok(())
-}
-
 pub fn host(address: &str, port: &str) {
     let listener = TcpListener::bind([address,":",port].concat()).unwrap();
     println!("server: ready");
@@ -42,7 +30,7 @@ fn handle_client(mut stream: TcpStream) {
         let res = match super::read_socket(&mut stream, 100000) {
             Ok(t) => t,
             Err(e) => {
-                notify_client_err(&mut stream,e);
+                //notify_client_err(&mut stream,e);
                 continue
             },
         };
@@ -66,18 +54,21 @@ fn notify_client_err(stream: &mut TcpStream, error: io::Error) {
     let fields = vec!("name", "type");
     let values = vec!("err", "disp");
     let meta = super::metadata::new(fields, values);
-    stream.write_all(b"Hello world");
+    let mut cont = error.to_string();
+    // Catching errors here would only serve as a debugging tool.
+    match super::encode::from_meta_data(meta, &mut cont) {
+        Ok(_) => (),
+        Err(e) => eprintln!("error was thrown when notifying client '{}'", e),
+    };
 }
 
 fn action(stream: &mut TcpStream, input: &str) -> Result<(), io::Error>  {
-    match input {
-        "ask" => send_ask(stream),
-        _ => stream.write_all(input.as_bytes()),
+    match &input[0..3] {
+        "ask" => super::send_ask(stream),
+        "get" => super::send_get(stream, &input[4..]),
+        _ => {
+            println!("unknown action");
+            Ok(()) // TODO should this be OK?
+        },
     }
-}
-
-fn send_ask(stream: &mut TcpStream) -> Result<(), io::Error> {
-    let mut files = "examples/files/foo.txt";
-    super::encode::generic("ask", &mut files.to_string(), "")?;
-    Ok(())
 }

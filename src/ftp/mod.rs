@@ -13,7 +13,7 @@ pub mod metadata;
 
 use std::thread;
 
-const STDBUF: usize = 8154;
+const STDBUF: usize = 1024;
 
 // Converts a list of bytes until a specific range in to a string.
 pub fn byte_to_string(bytes: &[u8], range: usize) -> String {
@@ -84,38 +84,39 @@ pub fn get_buffer(path: &str) -> Result<Buffer, io::Error> {
 }
 
 pub fn get(mut stream: &mut TcpStream, path: &str) -> Result<(), io::Error>{
-    let _ = stream.write_all(path.as_bytes());
+    let _ = stream.write_all(["get ", path].concat().as_bytes());
     //println!("client: waiting for response from {}...", stream.peer_addr()?);
 
-    let (string, c) = read_socket(&mut stream, 5)?;
-    println!("received {}b", c);
+    let string = read_socket(&mut stream, 10)?;
+    println!("received {}b", string.len());
 
     decode::generic(string)?;
     Ok(())
 }
 
 pub fn read_socket<'a>
-(stream: &mut TcpStream, timeout_sec: usize) -> Result<(String, usize), io::Error> {
+(stream: &mut TcpStream, timeout_milli: usize) -> Result<String, io::Error> {
     let mut buffer = [0; STDBUF]; // TODO improve length
     let mut tries = 0;
     let mut c;
-    let increment_delay = 250;
-    let timeout = (timeout_sec as f64/(increment_delay as f64*0.001)) as usize;
+    let increment_delay = 25;
+    let timeout = (timeout_milli/increment_delay as usize) as usize;
+
     let delay = time::Duration::from_millis(increment_delay);
-    stream.set_read_timeout(Some(delay))?;
+    stream.set_read_timeout(None)?;
     loop {
         c = stream.read(&mut buffer[..])?;
         if c != 0 {
             break;
         }
 
+        thread::sleep(delay);
         tries += 1;
         if tries > timeout {
-            println!("exceeded timeout");
             return Err(Error::new(ErrorKind::Other, "timeout"));
         }
     };
-    Ok((byte_to_string(&buffer, c), c))
+    Ok(byte_to_string(&buffer, c))
 }
 
 // TODO improve. Not implemented.

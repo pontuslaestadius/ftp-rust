@@ -30,7 +30,10 @@ pub fn generic(string: String) -> Result<(), io::Error> {
             let mut i = each.split(":");
 
             let property = i.next().unwrap();
-            let value = i.next().unwrap();
+            let value = match i.next() {
+                Some(e) => e,
+                None => break,
+            };
             match property  {
                 "name" => decoded_name = value,
                 "type" => decoded_type = value,

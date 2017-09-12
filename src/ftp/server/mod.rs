@@ -18,33 +18,28 @@ pub fn host(address: &str, port: &str) {
             handle_client(stream);
         });
     }
-    println!("server: shutting down");
+    println!("shutting down");
 }
 
 fn handle_client(mut stream: TcpStream) {
-    println!("server: connected {:?}", stream.peer_addr().unwrap());
+    println!("connected {:?}", stream.peer_addr().unwrap());
 
-    let mut string;
+    let mut string: String = String::new();
     let mut c: usize;
-    loop {
-        let res = match super::read_socket(&mut stream, 100000) {
-            Ok(t) => t,
-            Err(e) => {
-                //notify_client_err(&mut stream,e);
-                continue
-            },
-        };
-        string = res.0;
-        c = res.1;
-        break;
-    }
 
-    println!("server: received {}b read as: '{}'", c, string);
+    let string = match super::read_socket(&mut stream, 2000) {
+        Ok(t) => t,
+        Err(e) => {
+            notify_client_err(&mut stream,e);
+            process::exit(429);
+        },
+    };
+
+    println!("server: received {}b => '{}'", string.len(), string);
 
     match action(&mut stream, string.as_str()) {
         Ok(_) => (),
         Err(e) => notify_client_err(&mut stream, e),
-
     };
 }
 
@@ -63,12 +58,13 @@ fn notify_client_err(stream: &mut TcpStream, error: io::Error) {
 }
 
 fn action(stream: &mut TcpStream, input: &str) -> Result<(), io::Error>  {
-    match &input[0..3] {
+    let mut command = input.split(' ');
+    match command.next().unwrap() {
         "ask" => super::send_ask(stream),
-        "get" => super::send_get(stream, &input[4..]),
+        "get" => super::send_get(stream, command.next().unwrap()),
         _ => {
             println!("unknown action");
-            Ok(()) // TODO should this be OK?
+            Ok(())
         },
     }
 }
